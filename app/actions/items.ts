@@ -82,8 +82,7 @@ export async function getItems(filter?: { type?: string }) {
       user: { select: { name: true } },
     },
   });
-
-  return items.map((item) => ({
+  return items.map((item: typeof items[number]) => ({
     ...item,
     date: item.date.toISOString(),
     createdAt: item.createdAt.toISOString(),
@@ -113,7 +112,7 @@ export async function getUserItems() {
     },
   });
 
-  return items.map((item) => ({
+  return items.map((item: typeof items[number]) => ({
     ...item,
     date: item.date.toISOString(),
     createdAt: item.createdAt.toISOString(),
