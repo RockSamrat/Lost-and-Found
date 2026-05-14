@@ -1,8 +1,6 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
 import { createSession, deleteSession } from '@/lib/session';
 import {
   SignupFormSchema,
@@ -11,14 +9,15 @@ import {
   type LoginFormState,
 } from '@/lib/definitions';
 
+const API = process.env.API_URL;
+
 export async function signup(
   state: SignupFormState,
   formData: FormData
 ): Promise<SignupFormState> {
-  // 1. Validate
   const validated = SignupFormSchema.safeParse({
-    name: formData.get('name'),
-    email: formData.get('email'),
+    name:     formData.get('name'),
+    email:    formData.get('email'),
     password: formData.get('password'),
   });
 
@@ -26,22 +25,20 @@ export async function signup(
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { name, email, password } = validated.data;
-
-  // 2. Check if user exists
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { message: 'An account with this email already exists.' };
-  }
-
-  // 3. Hash password & create user
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: { name, email, password: hashedPassword },
+  const res = await fetch(`${API}/auth/signup`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(validated.data),
   });
 
-  // 4. Create session & redirect
-  await createSession(user.id);
+  const body = await res.json();
+
+  if (!res.ok) {
+    if (body.errors) return { errors: body.errors };
+    return { message: body.message ?? 'Signup failed. Please try again.' };
+  }
+
+  await createSession(body.token, new Date(body.expiresAt));
   redirect('/map');
 }
 
@@ -49,9 +46,8 @@ export async function login(
   state: LoginFormState,
   formData: FormData
 ): Promise<LoginFormState> {
-  // 1. Validate
   const validated = LoginFormSchema.safeParse({
-    email: formData.get('email'),
+    email:    formData.get('email'),
     password: formData.get('password'),
   });
 
@@ -59,22 +55,19 @@ export async function login(
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email, password } = validated.data;
+  const res = await fetch(`${API}/auth/login`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(validated.data),
+  });
 
-  // 2. Find user
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return { message: 'Invalid email or password.' };
+  const body = await res.json();
+
+  if (!res.ok) {
+    return { message: body.message ?? 'Invalid email or password.' };
   }
 
-  // 3. Compare password
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
-    return { message: 'Invalid email or password.' };
-  }
-
-  // 4. Create session & redirect
-  await createSession(user.id);
+  await createSession(body.token, new Date(body.expiresAt));
   redirect('/map');
 }
 

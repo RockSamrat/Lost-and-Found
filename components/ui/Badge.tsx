@@ -8,17 +8,21 @@ export interface BadgeProps {
   className?: string;
 }
 
-const icons: Record<BadgeVariant, string> = {
-  lost: '🔴',
-  found: '🟢',
-  resolved: '✓',
+const dots: Record<BadgeVariant, React.CSSProperties> = {
+  lost:     { background: 'var(--accent)' },
+  found:    { background: 'var(--success)' },
+  resolved: { background: 'var(--text-tertiary)' },
+};
+
+const labels: Record<BadgeVariant, string> = {
+  lost: 'Lost', found: 'Found', resolved: 'Resolved',
 };
 
 export default function Badge({ variant, children, className = '' }: BadgeProps) {
   return (
     <span className={`badge badge--${variant} ${className}`}>
-      <span style={{ fontSize: '0.625rem' }}>{icons[variant]}</span>
-      {children ?? variant}
+      <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, ...dots[variant] }} />
+      {children ?? labels[variant]}
     </span>
   );
 }

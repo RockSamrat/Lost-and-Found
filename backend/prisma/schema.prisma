@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  items     Item[]
+}
+
+model Item {
+  id           String   @id @default(cuid())
+  type         String   // "LOST" | "FOUND"
+  title        String
+  description  String
+  category     String   // "Electronics", "Keys", "Wallet", "Pet", "Bag", "Documents", "Other"
+  imageUrl     String?
+  latitude     Float
+  longitude    Float
+  locationName String?
+  date         DateTime
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([type])
+  @@index([userId])
+  @@index([latitude, longitude])
+}

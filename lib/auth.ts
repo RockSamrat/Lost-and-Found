@@ -1,15 +1,9 @@
 import 'server-only';
-import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 
+// No DB call needed — name + email are embedded in the JWT by the API
 export async function getCurrentUser() {
   const session = await getSession();
   if (!session?.userId) return null;
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, name: true, email: true },
-  });
-
-  return user;
+  return { id: session.userId, name: session.name, email: session.email };
 }

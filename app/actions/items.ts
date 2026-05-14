@@ -1,19 +1,20 @@
 'use server';
 
-import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getSession, getSessionToken } from '@/lib/session';
 import { revalidatePath } from 'next/cache';
 import * as z from 'zod';
 
+const API = process.env.API_URL;
+
 const ItemSchema = z.object({
-  type: z.enum(['LOST', 'FOUND']),
-  title: z.string().min(3, 'Title must be at least 3 characters').max(100),
-  description: z.string().min(10, 'Description must be at least 10 characters').max(1000),
-  category: z.enum(['Electronics', 'Keys', 'Wallet', 'Pet', 'Bag', 'Documents', 'Other']),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  type:         z.enum(['LOST', 'FOUND']),
+  title:        z.string().min(3, 'Title must be at least 3 characters').max(100),
+  description:  z.string().min(10, 'Description must be at least 10 characters').max(1000),
+  category:     z.enum(['Electronics', 'Keys', 'Wallet', 'Pet', 'Bag', 'Documents', 'Other']),
+  latitude:     z.number().min(-90).max(90),
+  longitude:    z.number().min(-180).max(180),
   locationName: z.string().optional(),
-  date: z.string().transform((s) => new Date(s)),
+  date:         z.string(),
 });
 
 export type ItemFormState = {
@@ -26,20 +27,18 @@ export async function createItem(
   state: ItemFormState,
   formData: FormData
 ): Promise<ItemFormState> {
-  const session = await getSession();
-  if (!session?.userId) {
-    return { message: 'You must be logged in to report an item.' };
-  }
+  const token = await getSessionToken();
+  if (!token) return { message: 'You must be logged in to report an item.' };
 
   const raw = {
-    type: formData.get('type'),
-    title: formData.get('title'),
-    description: formData.get('description'),
-    category: formData.get('category'),
-    latitude: Number(formData.get('latitude')),
-    longitude: Number(formData.get('longitude')),
+    type:         formData.get('type'),
+    title:        formData.get('title'),
+    description:  formData.get('description'),
+    category:     formData.get('category'),
+    latitude:     Number(formData.get('latitude')),
+    longitude:    Number(formData.get('longitude')),
     locationName: formData.get('locationName') || undefined,
-    date: formData.get('date'),
+    date:         formData.get('date'),
   };
 
   const validated = ItemSchema.safeParse(raw);
@@ -47,104 +46,68 @@ export async function createItem(
     return { errors: validated.error.flatten().fieldErrors as Record<string, string[]> };
   }
 
-  await prisma.item.create({
-    data: {
-      ...validated.data,
-      userId: session.userId,
+  const res = await fetch(`${API}/items`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      Authorization:   `Bearer ${token}`,
     },
+    body: JSON.stringify(validated.data),
   });
 
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (body.errors) return { errors: body.errors };
+    return { message: body.message ?? 'Failed to create item. Please try again.' };
+  }
+
+  revalidatePath('/feed');
   revalidatePath('/map');
   return { success: true };
 }
 
-export async function getItems(filter?: { type?: string }) {
-  const where: Record<string, unknown> = {};
-  if (filter?.type && filter.type !== 'ALL') {
-    where.type = filter.type;
-  }
-
-  const items = await prisma.item.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      type: true,
-      title: true,
-      description: true,
-      category: true,
-      latitude: true,
-      longitude: true,
-      locationName: true,
-      date: true,
-      resolved: true,
-      createdAt: true,
-      user: { select: { name: true } },
-    },
-  });
-  return items.map((item: typeof items[number]) => ({
-    ...item,
-    date: item.date.toISOString(),
-    createdAt: item.createdAt.toISOString(),
-    userName: item.user.name,
-  }));
+export async function getItems() {
+  const res = await fetch(`${API}/items`, { next: { revalidate: 30 } });
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function getUserItems() {
-  const session = await getSession();
-  if (!session?.userId) return [];
+  const token = await getSessionToken();
+  if (!token) return [];
 
-  const items = await prisma.item.findMany({
-    where: { userId: session.userId },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      type: true,
-      title: true,
-      description: true,
-      category: true,
-      latitude: true,
-      longitude: true,
-      locationName: true,
-      date: true,
-      resolved: true,
-      createdAt: true,
-    },
+  const res = await fetch(`${API}/items/mine`, {
+    headers: { Authorization: `Bearer ${token}` },
+    next: { revalidate: 0 },
   });
-
-  return items.map((item: typeof items[number]) => ({
-    ...item,
-    date: item.date.toISOString(),
-    createdAt: item.createdAt.toISOString(),
-  }));
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function toggleResolved(itemId: string) {
-  const session = await getSession();
-  if (!session?.userId) return;
+  const token = await getSessionToken();
+  if (!token) return;
 
-  const item = await prisma.item.findFirst({
-    where: { id: itemId, userId: session.userId },
-  });
-  if (!item) return;
-
-  await prisma.item.update({
-    where: { id: itemId },
-    data: { resolved: !item.resolved },
+  await fetch(`${API}/items/${itemId}/resolve`, {
+    method:  'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
   });
 
+  revalidatePath('/feed');
   revalidatePath('/map');
   revalidatePath('/my-posts');
 }
 
 export async function deleteItem(itemId: string) {
-  const session = await getSession();
-  if (!session?.userId) return;
+  const token = await getSessionToken();
+  if (!token) return;
 
-  await prisma.item.deleteMany({
-    where: { id: itemId, userId: session.userId },
+  await fetch(`${API}/items/${itemId}`, {
+    method:  'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
   });
 
+  revalidatePath('/feed');
   revalidatePath('/map');
   revalidatePath('/my-posts');
 }

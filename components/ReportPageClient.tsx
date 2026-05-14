@@ -6,298 +6,224 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import { createItem } from '@/app/actions/items';
 import { useRouter } from 'next/navigation';
+import {
+  MapPin, Smartphone, KeyRound, Wallet, PawPrint,
+  ShoppingBag, FileText, Package, LocateFixed,
+  CheckCircle2, MousePointerClick, Send, AlertCircle,
+} from 'lucide-react';
 
 const LocationPicker = dynamic(() => import('@/components/LocationPicker'), { ssr: false });
 
-const categories = [
-  { value: 'Electronics', icon: '📱', label: 'Electronics' },
-  { value: 'Keys', icon: '🔑', label: 'Keys' },
-  { value: 'Wallet', icon: '👛', label: 'Wallet' },
-  { value: 'Pet', icon: '🐾', label: 'Pet' },
-  { value: 'Bag', icon: '🎒', label: 'Bag' },
-  { value: 'Documents', icon: '📄', label: 'Documents' },
-  { value: 'Other', icon: '📦', label: 'Other' },
+const CATEGORIES = [
+  { value: 'Electronics', Icon: Smartphone,  label: 'Electronics' },
+  { value: 'Keys',        Icon: KeyRound,    label: 'Keys' },
+  { value: 'Wallet',      Icon: Wallet,      label: 'Wallet' },
+  { value: 'Pet',         Icon: PawPrint,    label: 'Pet' },
+  { value: 'Bag',         Icon: ShoppingBag, label: 'Bag' },
+  { value: 'Documents',   Icon: FileText,    label: 'Documents' },
+  { value: 'Other',       Icon: Package,     label: 'Other' },
 ];
 
 export default function ReportPageClient() {
   const [state, action, pending] = useActionState(createItem, undefined);
   const formRef = useRef<HTMLFormElement>(null);
-  const router = useRouter();
+  const router  = useRouter();
 
-  const [itemType, setItemType] = useState<'LOST' | 'FOUND'>('LOST');
-  const [selectedCategory, setSelectedCategory] = useState('Electronics');
-  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationName, setLocationName] = useState('');
-  const [detecting, setDetecting] = useState(false);
+  const [itemType,          setItemType]          = useState<'LOST' | 'FOUND'>('LOST');
+  const [selectedCategory,  setSelectedCategory]  = useState('Electronics');
+  const [position,          setPosition]          = useState<{ lat: number; lng: number } | null>(null);
+  const [locationName,      setLocationName]      = useState('');
+  const [detecting,         setDetecting]         = useState(false);
+  const [geoError,          setGeoError]          = useState(false);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setPosition({ lat, lng });
+    setGeoError(false);
   }, []);
 
-  const detectLocation = () => {
-    if (!navigator.geolocation) return;
+  const detectLocation = useCallback(() => {
+    if (!navigator.geolocation) { setGeoError(true); return; }
     setDetecting(true);
+    setGeoError(false);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setDetecting(false);
       },
-      () => setDetecting(false),
+      () => { setDetecting(false); setGeoError(true); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  };
-
-  useEffect(() => {
-    if (state?.success) {
-      formRef.current?.reset();
-      router.push('/feed');
-    }
-  }, [state?.success, router]);
-
-  // Auto-detect location on mount
-  useEffect(() => {
-    detectLocation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { if (state?.success) { formRef.current?.reset(); router.push('/feed'); } }, [state?.success, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { detectLocation(); }, []);
 
   const today = new Date().toISOString().split('T')[0];
 
   return (
-    <section style={{ padding: '32px 24px', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
-      {/* Header */}
-      <div className="animate-fade-in-up" style={{ marginBottom: '32px', textAlign: 'center' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📍</div>
-        <h1
-          style={{
-            fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-            fontWeight: 800,
-            color: 'var(--text-primary)',
-            marginBottom: '8px',
-          }}
-        >
+    <section style={{ padding: '40px 24px 80px', maxWidth: '720px', margin: '0 auto', width: '100%' }}>
+
+      {/* Page header */}
+      <div className="animate-fade-in-up" style={{ marginBottom: '36px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'var(--accent-soft)', marginBottom: 16 }}>
+          <MapPin size={22} color="var(--accent)" />
+        </div>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 6 }}>
           Report an Item
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.938rem', margin: 0, maxWidth: '420px', marginLeft: 'auto', marginRight: 'auto' }}>
-          Pin it on the map so the community can help you find it — or return it to its owner.
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', margin: 0 }}>
+          Pin the location, describe what you lost or found, and let the community help.
         </p>
       </div>
 
-      {/* Status message */}
-      {state?.message && (
-        <div
-          className="animate-fade-in"
-          style={{
-            background: 'var(--accent-soft)',
-            color: 'var(--accent)',
-            padding: '12px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.875rem',
-            fontWeight: 600,
-            marginBottom: '24px',
-            textAlign: 'center',
-          }}
-        >
+      {/* Server error banner */}
+      {state?.message && !state?.success && (
+        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--accent-soft)', color: 'var(--accent)', padding: '12px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontWeight: 600, marginBottom: 24, border: '1px solid rgba(192,57,43,0.2)' }}>
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
           {state.message}
         </div>
       )}
 
-      <form ref={formRef} action={action} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Hidden fields */}
-        <input type="hidden" name="latitude" value={position?.lat ?? ''} />
+      <form ref={formRef} action={action} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <input type="hidden" name="latitude"  value={position?.lat ?? ''} />
         <input type="hidden" name="longitude" value={position?.lng ?? ''} />
-        <input type="hidden" name="type" value={itemType} />
-        <input type="hidden" name="category" value={selectedCategory} />
+        <input type="hidden" name="type"      value={itemType} />
+        <input type="hidden" name="category"  value={selectedCategory} />
 
-        {/* ═══ Step 1: Type ═══ */}
-        <div className="neu-card animate-fade-in-up" style={{ animationDelay: '50ms', animationFillMode: 'backwards' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <span
-              className="neu-pressed"
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.813rem',
-                fontWeight: 800,
-                color: 'var(--accent)',
-              }}
-            >
-              1
-            </span>
-            <h2 style={{ fontWeight: 700, fontSize: '1.063rem', color: 'var(--text-primary)', margin: 0 }}>
-              What happened?
-            </h2>
-          </div>
+        {/* ── Step 1: Type ── */}
+        <fieldset style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 22px', margin: 0, background: 'var(--bg-raised)', boxShadow: 'var(--shadow-xs)' }}>
+          <legend style={{ padding: '0 6px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Step 1
+          </legend>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 14px' }}>
+            What happened?
+          </h2>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {([
-              { value: 'LOST' as const, label: 'I Lost Something', icon: '🔴', desc: 'Report a missing item' },
-              { value: 'FOUND' as const, label: 'I Found Something', icon: '🟢', desc: 'Help return an item' },
-            ]).map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setItemType(t.value)}
-                className={itemType === t.value ? 'neu-pressed' : 'neu-flat'}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '20px 16px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  border: itemType === t.value ? '2px solid var(--accent)' : '2px solid transparent',
-                  transition: 'all var(--transition-fast)',
-                  background: 'var(--bg-base)',
-                }}
-              >
-                <span style={{ fontSize: '1.5rem' }}>{t.icon}</span>
-                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t.label}</span>
-                <span style={{ fontSize: '0.688rem', color: 'var(--text-tertiary)' }}>{t.desc}</span>
-              </button>
-            ))}
+              { value: 'LOST'  as const, label: 'I Lost Something',  sub: 'Report a missing item',  dot: 'var(--accent)' },
+              { value: 'FOUND' as const, label: 'I Found Something', sub: 'Help return an item',    dot: 'var(--success)' },
+            ]).map((t) => {
+              const active = itemType === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setItemType(t.value)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
+                    padding: '14px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    border: active ? '2px solid var(--accent)' : '1px solid var(--border-medium)',
+                    background: active ? 'var(--accent-soft)' : 'var(--bg-base)',
+                    transition: 'all var(--transition-fast)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.dot, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{t.label}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{t.sub}</span>
+                </button>
+              );
+            })}
           </div>
-          {state?.errors?.type && <p style={{ color: 'var(--accent)', fontSize: '0.75rem', marginTop: '8px' }}>{state.errors.type[0]}</p>}
-        </div>
+          {state?.errors?.type && <FieldError msg={state.errors.type[0]} />}
+        </fieldset>
 
-        {/* ═══ Step 2: Item Details ═══ */}
-        <div className="neu-card animate-fade-in-up" style={{ animationDelay: '100ms', animationFillMode: 'backwards' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <span
-              className="neu-pressed"
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.813rem',
-                fontWeight: 800,
-                color: 'var(--accent)',
-              }}
-            >
-              2
-            </span>
-            <h2 style={{ fontWeight: 700, fontSize: '1.063rem', color: 'var(--text-primary)', margin: 0 }}>
-              Describe the item
-            </h2>
-          </div>
+        {/* ── Step 2: Item details ── */}
+        <fieldset style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 22px', margin: 0, background: 'var(--bg-raised)', boxShadow: 'var(--shadow-xs)' }}>
+          <legend style={{ padding: '0 6px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Step 2
+          </legend>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 16px' }}>
+            Describe the item
+          </h2>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Input
-              label="What did you lose / find?"
+              label="What did you lose or find?"
               name="title"
               placeholder="e.g. Black leather wallet, iPhone 15, car keys..."
               required
               error={state?.errors?.title?.[0]}
             />
 
-            {/* Category pills */}
+            {/* Category */}
             <div>
-              <label style={{ fontSize: '0.813rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '10px' }}>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
                 Category
-              </label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {categories.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setSelectedCategory(c.value)}
-                    className={selectedCategory === c.value ? 'neu-pressed' : 'neu-flat'}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: 'var(--radius-full)',
-                      border: selectedCategory === c.value ? '1.5px solid var(--accent)' : '1.5px solid transparent',
-                      fontSize: '0.75rem',
-                      fontWeight: selectedCategory === c.value ? 700 : 500,
-                      color: selectedCategory === c.value ? 'var(--accent)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      background: 'var(--bg-base)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      transition: 'all var(--transition-fast)',
-                    }}
-                  >
-                    <span>{c.icon}</span> {c.label}
-                  </button>
-                ))}
+              </p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {CATEGORIES.map(({ value, Icon, label }) => {
+                  const active = selectedCategory === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSelectedCategory(value)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-full)',
+                        border: active ? '1.5px solid var(--accent)' : '1px solid var(--border-medium)',
+                        fontSize: '0.8125rem', fontWeight: active ? 700 : 500,
+                        color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        background: active ? 'var(--accent-soft)' : 'var(--bg-base)',
+                        transition: 'all var(--transition-fast)',
+                      }}
+                    >
+                      <Icon size={12} /> {label}
+                    </button>
+                  );
+                })}
               </div>
-              {state?.errors?.category && <p style={{ color: 'var(--accent)', fontSize: '0.75rem', marginTop: '6px' }}>{state.errors.category[0]}</p>}
+              {state?.errors?.category && <FieldError msg={state.errors.category[0]} />}
             </div>
 
             {/* Description */}
             <div>
-              <label style={{ fontSize: '0.813rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
                 Description
               </label>
-              <div className="neu-pressed" style={{ borderRadius: 'var(--radius-md)', padding: 0 }}>
-                <textarea
-                  name="description"
-                  rows={3}
-                  required
-                  placeholder="Describe the item in detail — color, brand, distinguishing features..."
-                  style={{
-                    width: '100%',
-                    padding: '14px 18px',
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    fontSize: '0.875rem',
-                    color: 'var(--text-primary)',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                    lineHeight: 1.6,
-                  }}
-                />
-              </div>
-              {state?.errors?.description && <p style={{ color: 'var(--accent)', fontSize: '0.75rem', marginTop: '6px' }}>{state.errors.description[0]}</p>}
+              <textarea
+                name="description"
+                rows={3}
+                required
+                placeholder="Color, brand, distinguishing features..."
+                style={{
+                  width: '100%', padding: '11px 14px',
+                  background: 'var(--bg-raised)',
+                  border: '1px solid var(--border-medium)',
+                  borderRadius: 'var(--radius-md)',
+                  outline: 'none',
+                  fontSize: '0.9375rem', color: 'var(--text-primary)',
+                  resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6,
+                  transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-soft)'; }}
+                onBlur={(e)  => { e.target.style.borderColor = 'var(--border-medium)'; e.target.style.boxShadow = 'none'; }}
+              />
+              {state?.errors?.description && <FieldError msg={state.errors.description[0]} />}
             </div>
 
-            <Input
-              label="When did it happen?"
-              name="date"
-              type="date"
-              required
-              defaultValue={today}
-              error={state?.errors?.date?.[0]}
-            />
+            <Input label="When did it happen?" name="date" type="date" required defaultValue={today} error={state?.errors?.date?.[0]} />
           </div>
-        </div>
+        </fieldset>
 
-        {/* ═══ Step 3: Location ═══ */}
-        <div className="neu-card animate-fade-in-up" style={{ animationDelay: '150ms', animationFillMode: 'backwards' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <span
-              className="neu-pressed"
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-full)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.813rem',
-                fontWeight: 800,
-                color: 'var(--accent)',
-              }}
-            >
-              3
-            </span>
-            <h2 style={{ fontWeight: 700, fontSize: '1.063rem', color: 'var(--text-primary)', margin: 0 }}>
-              Where was it?
-            </h2>
-          </div>
+        {/* ── Step 3: Location ── */}
+        <fieldset style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 22px', margin: 0, background: 'var(--bg-raised)', boxShadow: 'var(--shadow-xs)' }}>
+          <legend style={{ padding: '0 6px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Step 3
+          </legend>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 14px' }}>
+            Where was it?
+          </h2>
 
-          {/* GPS + Location name row */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
               <Input
                 label="Location name (optional)"
                 name="locationName"
@@ -306,88 +232,67 @@ export default function ReportPageClient() {
                 onChange={(e) => setLocationName(e.target.value)}
               />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <Button type="button" variant="outlined" size="sm" onClick={detectLocation} loading={detecting}>
-                📍 Use My Location
-              </Button>
-            </div>
+            <Button type="button" variant="outlined" size="sm" onClick={detectLocation} loading={detecting}>
+              <LocateFixed size={14} /> Use my location
+            </Button>
           </div>
 
-          {/* Map */}
-          <div
-            className="neu-pressed"
-            style={{
-              borderRadius: 'var(--radius-md)',
-              overflow: 'hidden',
-              height: '320px',
-              position: 'relative',
-            }}
-          >
-            <LocationPicker
-              onMapClick={handleMapClick}
-              selectedPosition={position}
-            />
+          {/* THE FIX: position:relative so the absolute Leaflet div renders inside */}
+          <div style={{ position: 'relative', height: 300, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            <LocationPicker onMapClick={handleMapClick} selectedPosition={position} />
           </div>
 
           {/* Location status */}
-          {position ? (
-            <div
-              className="neu-flat animate-fade-in"
-              style={{
-                marginTop: '12px',
-                padding: '10px 16px',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.813rem',
-                color: 'var(--success)',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span>✅</span>
-              Location set: {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
-            </div>
-          ) : (
-            <div
-              style={{
-                marginTop: '12px',
-                padding: '10px 16px',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.813rem',
-                color: 'var(--text-tertiary)',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'var(--accent-soft)',
-              }}
-            >
-              <span>👆</span>
-              Tap the map or use &quot;Use My Location&quot; to set the pin
-            </div>
-          )}
-        </div>
+          <div style={{ marginTop: 10 }}>
+            {position ? (
+              <div className="animate-fade-in" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--success)', fontWeight: 600, background: 'var(--success-soft)', border: '1px solid rgba(39,174,96,0.18)' }}>
+                <CheckCircle2 size={14} />
+                Pin set: {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
+                <button
+                  type="button"
+                  onClick={() => setPosition(null)}
+                  style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--success)', opacity: 0.7, fontSize: '0.75rem', padding: 0 }}
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--text-secondary)', background: 'var(--bg-sunken)', border: '1px solid var(--border-subtle)' }}>
+                <MousePointerClick size={14} style={{ flexShrink: 0 }} />
+                {geoError ? 'Location access denied — tap the map to set a pin manually.' : 'Tap the map to place a pin, or use the button above.'}
+              </div>
+            )}
+          </div>
+        </fieldset>
 
-        {/* Submit */}
-        <div className="animate-fade-in-up" style={{ animationDelay: '200ms', animationFillMode: 'backwards' }}>
+        {/* ── Submit ── */}
+        <div style={{ paddingTop: 4 }}>
           <Button
             type="submit"
             variant="accent"
             size="lg"
             loading={pending}
             disabled={!position}
-            style={{ width: '100%', fontSize: '1rem' }}
+            style={{ width: '100%', gap: 8, justifyContent: 'center' }}
           >
-            {pending ? 'Submitting...' : '📌 Post Report'}
+            {!pending && <Send size={16} />}
+            {pending ? 'Posting...' : 'Post Report'}
           </Button>
           {!position && (
-            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-              Set a location on the map to enable posting
+            <p style={{ textAlign: 'center', fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginTop: 8 }}>
+              Place a pin on the map to enable posting
             </p>
           )}
         </div>
       </form>
     </section>
+  );
+}
+
+function FieldError({ msg }: { msg: string }) {
+  return (
+    <p style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 500, marginTop: 5, margin: '5px 0 0' }}>
+      <AlertCircle size={12} /> {msg}
+    </p>
   );
 }

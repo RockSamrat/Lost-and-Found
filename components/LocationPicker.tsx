@@ -9,24 +9,20 @@ interface LocationPickerProps {
   selectedPosition: { lat: number; lng: number } | null;
 }
 
-const pinIcon = L.divIcon({
-  className: '',
-  html: `<div style="width:36px;height:36px;border-radius:50%;background:#C0392B;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 12px rgba(192,57,43,0.6);border:3px solid #fff;animation:pulse 1.5s infinite;">📍</div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-});
-
 export default function LocationPicker({ onMapClick, selectedPosition }: LocationPickerProps) {
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef       = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const pinRef = useRef<L.Marker | null>(null);
+  const pinRef       = useRef<L.Marker | null>(null);
+  // Always-current callback ref so the map click handler never goes stale
+  const onClickRef   = useRef(onMapClick);
+  useEffect(() => { onClickRef.current = onMapClick; }, [onMapClick]);
 
-  // Initialize map
+  // Initialize map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
-      center: [27.7172, 85.3240],
+      center: [27.7172, 85.324],
       zoom: 13,
       zoomControl: false,
     });
@@ -38,11 +34,10 @@ export default function LocationPicker({ onMapClick, selectedPosition }: Locatio
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Try user location
     map.locate({ setView: true, maxZoom: 15 });
 
     map.on('click', (e: L.LeafletMouseEvent) => {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      onClickRef.current(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;
@@ -51,10 +46,9 @@ export default function LocationPicker({ onMapClick, selectedPosition }: Locatio
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update pin when selectedPosition changes
+  // Sync pin marker
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -64,19 +58,27 @@ export default function LocationPicker({ onMapClick, selectedPosition }: Locatio
     }
 
     if (selectedPosition) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:32px;height:32px;border-radius:50%;background:#C0392B;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 2px 10px rgba(192,57,43,0.45);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.5-7-12a7 7 0 1 1 14 0c0 5.5-7 12-7 12Z" stroke="#fff" stroke-width="2"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg></div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+      });
+
       pinRef.current = L.marker(
         [selectedPosition.lat, selectedPosition.lng],
-        { icon: pinIcon }
+        { icon }
       ).addTo(mapRef.current);
 
-      mapRef.current.setView([selectedPosition.lat, selectedPosition.lng], mapRef.current.getZoom(), { animate: true });
+      mapRef.current.setView(
+        [selectedPosition.lat, selectedPosition.lng],
+        mapRef.current.getZoom(),
+        { animate: true }
+      );
     }
   }, [selectedPosition]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
-    />
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
   );
 }
